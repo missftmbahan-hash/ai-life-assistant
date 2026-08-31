@@ -26,7 +26,7 @@ export default {
             "Content-Type": "application/json"
           },
           body: JSON.stringify({
-            model: "glm-5.1",
+            model: "glm-4.7-flash",
             messages: [
               {
                 role: "system",
