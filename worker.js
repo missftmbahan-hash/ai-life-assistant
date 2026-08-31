@@ -1,5 +1,7 @@
 export default {
   async fetch(request, env) {
+
+    // تست باز بودن Worker
     if (request.method === "GET") {
       return new Response("AI Life Assistant is running");
     }
@@ -14,7 +16,7 @@ export default {
         return new Response("OK");
       }
 
-      // Send user's message to Z.AI
+      // درخواست به Z.ai
       const aiResponse = await fetch(
         "https://api.z.ai/api/paas/v4/chat/completions",
         {
@@ -29,7 +31,7 @@ export default {
               {
                 role: "system",
                 content:
-                  "You are AI Life Assistant, a helpful personal AI assistant. Respond in Persian when the user speaks Persian. Be clear, practical and friendly."
+                  "You are AI Life Assistant. Answer in Persian when the user speaks Persian."
               },
               {
                 role: "user",
@@ -41,13 +43,33 @@ export default {
         }
       );
 
-      const aiData = await aiResponse.json();
+      const rawResponse = await aiResponse.text();
 
-      let reply =
-        aiData?.choices?.[0]?.message?.content ||
-        "متأسفم، نتونستم از هوش مصنوعی پاسخ بگیرم.";
+      let reply;
 
-      // Send AI response back to Telegram
+      // اگر Z.ai خطا داد
+      if (!aiResponse.ok) {
+        reply =
+          "Z.ai Error\n" +
+          "Status: " +
+          aiResponse.status +
+          "\n\n" +
+          rawResponse.slice(0, 1500);
+      } else {
+        try {
+          const aiData = JSON.parse(rawResponse);
+
+          reply =
+            aiData?.choices?.[0]?.message?.content ||
+            "پاسخ از Z.ai دریافت شد، اما متن پاسخ پیدا نشد.";
+        } catch {
+          reply =
+            "پاسخ Z.ai قابل خواندن نبود:\n\n" +
+            rawResponse.slice(0, 1500);
+        }
+      }
+
+      // ارسال نتیجه به تلگرام
       await fetch(
         `https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}/sendMessage`,
         {
@@ -63,9 +85,16 @@ export default {
       );
 
       return new Response("OK");
+
     } catch (error) {
-      console.error(error);
-      return new Response("Error", { status: 500 });
+
+      // ثبت خطای اصلی در Cloudflare
+      console.error("WORKER ERROR:", error);
+
+      return new Response(
+        "Worker Error: " + String(error),
+        { status: 500 }
+      );
     }
   }
 };
